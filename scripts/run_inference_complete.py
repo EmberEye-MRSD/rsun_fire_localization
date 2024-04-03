@@ -48,6 +48,7 @@ parser = argparse.ArgumentParser(
 )
 parser.add_argument("--model", default="Fast_ACVNet_plus", choices=__models__.keys(), help="select a model structure")
 parser.add_argument("--maxdisp", type=int, default=192, help="maximum disparity")
+parser.add_argument("--process", default="hist_99", help="data preprocess mode (raw, minmax, hist_99)")
 
 # TODO: Post both-docker integration, change directory
 parser.add_argument("--loadckpt",            type=str, default="/wildfire/development/embereye_ws/src/rsun_fire_localization/config/checkpoint_000064.zip", help="load the weights from a specific checkpoint(zip)")
@@ -147,6 +148,12 @@ class DepthEstimationModel:
         disp = baseline * focal / (depth + 1e-10)
         disp[mask] = 0.0
         return disp
+
+    def disp2depth(self, disp, focal, baseline):
+        mask = disp < 1e-3
+        depth = baseline * focal / (disp + 1e-10)
+        depth[mask] = 0.0
+        return depth
 
     def load_depth_as_disp(self, depth_path):
         if not os.path.exists(depth_path):
