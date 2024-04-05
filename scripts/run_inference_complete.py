@@ -30,6 +30,11 @@ import time
 import rospy
 from sensor_msgs.msg import Image
 from std_msgs.msg import Float32MultiArray
+
+# TODO: Make custom ros msg and import that, currently using JointState (for timestamp)
+from sensor_msgs.msg import JointState
+# from rsun_fire_localization.msg import depth_info
+
 from cv_bridge import CvBridge, CvBridgeError
 
 # import modules for rectification
@@ -55,9 +60,7 @@ parser.add_argument("--loadckpt",            type=str, default="/wildfire/develo
 parser.add_argument("--left_thermal_calib",  type=str, default="/wildfire/development/embereye_ws/src/rsun_fire_localization/config/thermal_left_calib.yaml")
 parser.add_argument("--right_thermal_calib", type=str, default="/wildfire/development/embereye_ws/src/rsun_fire_localization/config/thermal_right_calib.yaml")
 
-# Debug parser added
-parser.add_argument("--debug", action='store_true', help="Enable debug mode")
-
+# Visualize parser added
 parser.add_argument("--visualize", type=int, default=0, help="Helps in debugging thermal data")
 
 
@@ -72,11 +75,17 @@ class DepthEstimationModel:
         # ROS Variables
         self.thermal_left_sub = message_filters.Subscriber('/thermal_left/image', Image)
         self.thermal_right_sub = message_filters.Subscriber('/thermal_right/image', Image)
-        self.depth_pub = rospy.Publisher("/thermal_depth/array", Float32MultiArray, queue_size=10)
+        self.stamped_publisher_ = rospy.Publisher("/thermal_depth/stamped_array", JointState, queue_size=10)
+
         self.depth_img_pub = rospy.Publisher("/thermal_depth/image", Image, queue_size=10)
 
         self.depth_arr_msg = Float32MultiArray()
         self.depth_img_msg = Image()
+        self.pointcloud_msg = JointState()
+        self.pointcloud_msg.header.seq  = 0
+        # TODO: Correct this according to frame conventions 
+        self.pointcloud_msg.header.frame_id = 'left_camera'
+
 
         # Time-sync Variables
         self.tolerance = 100e-03
@@ -88,8 +97,6 @@ class DepthEstimationModel:
 
         self.rectify = RectifyImage(self.args.left_thermal_calib, self.args.right_thermal_calib)
 
-        self.debug = self.args.debug
-
         self.visualize = self.args.visualize
 
     
@@ -97,6 +104,10 @@ class DepthEstimationModel:
         try:
             left_image = CvBridge().imgmsg_to_cv2(left_image_msg, "16UC1")
             right_image = CvBridge().imgmsg_to_cv2(right_image_msg, "16UC1")
+            # Save Timestamp
+            self.pointcloud_msg.header.stamp = rospy.Time.now()
+            self.pointcloud_msg.header.seq += 1
+            
         except CvBridgeError as e:
             print(e)
 
@@ -155,24 +166,29 @@ class DepthEstimationModel:
             depth_color = cv2.applyColorMap(cv2.convertScaleAbs(depth_normalized, alpha=255), cv2.COLORMAP_JET)
             self.depth_img_msg = CvBridge().cv2_to_imgmsg(depth_color, encoding='bgr8')
             self.depth_img_pub.publish(self.depth_img_msg)        
-
-        # Show depth_image if debug is ON
-        if self.debug:
             
-            depth_log_scaled = visualize_disp_as_numpy(disp_ests[0])
-            depth_color = cv2.applyColorMap(depth_log_scaled.astype(np.uint8), cv2.COLORMAP_JET)
-            self.depth_img_msg = CvBridge().cv2_to_imgmsg(depth_color, encoding='bgr8')
-            self.depth_img_pub.publish(self.depth_img_msg)
-            
-        # Publish depth as array(float)
-        self.publish_depth_array(depth)
+        # Publish depth as stamped array(for timestamp data)
+        self.publish_depth_pointcloud(depth)
         return
-
-    def publish_depth_array(self, depth):
+    
+    def publish_depth_pointcloud(self, depth):
+        # self.pointcloud_msg.points = []
+        # self.pointcloud
         
-        self.depth_arr_msg.data = depth.flatten().tolist()
-        self.depth_pub.publish(self.depth_arr_msg)
+        # for y in range(depth.shape[0]):
+        #     for x in range(depth.shape[1]):
+        #         point = Point32()
+        #         # Assume x, y are just pixel index
+        #         point.x = x  
+        #         point.y = y  
+        #         # Depth value as z-coordinate
+        #         point.z = depth[y, x] 
+        #         self.pointcloud_msg.points.append(point)
+        
+        self.pointcloud_msg.position = depth.flatten().tolist()
+        self.stamped_publisher_.publish(self.pointcloud_msg)
         return
+
 
 
     def depth2disp(self, depth, focal, baseline):
