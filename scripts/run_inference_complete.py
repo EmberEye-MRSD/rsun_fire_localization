@@ -55,6 +55,10 @@ parser.add_argument("--loadckpt",            type=str, default="/wildfire/develo
 parser.add_argument("--left_thermal_calib",  type=str, default="/wildfire/development/embereye_ws/src/rsun_fire_localization/config/thermal_left_calib.yaml")
 parser.add_argument("--right_thermal_calib", type=str, default="/wildfire/development/embereye_ws/src/rsun_fire_localization/config/thermal_right_calib.yaml")
 
+# Debug parser added
+parser.add_argument("--debug", action='store_true', help="Enable debug mode")
+
+parser.add_argument("--visualize", type=int, default=0, help="Helps in debugging thermal data")
 
 
 class DepthEstimationModel:
@@ -68,7 +72,11 @@ class DepthEstimationModel:
         # ROS Variables
         self.thermal_left_sub = message_filters.Subscriber('/thermal_left/image', Image)
         self.thermal_right_sub = message_filters.Subscriber('/thermal_right/image', Image)
-        self.depth_pub = rospy.Publisher("/thermal_depth/image_raw", Float32MultiArray, queue_size=10)
+        self.depth_pub = rospy.Publisher("/thermal_depth/array", Float32MultiArray, queue_size=10)
+        self.depth_img_pub = rospy.Publisher("/thermal_depth/image", Image, queue_size=10)
+
+        self.depth_arr_msg = Float32MultiArray()
+        self.depth_img_msg = Image()
 
         # Time-sync Variables
         self.tolerance = 100e-03
@@ -79,6 +87,11 @@ class DepthEstimationModel:
         self.right_img = None
 
         self.rectify = RectifyImage(self.args.left_thermal_calib, self.args.right_thermal_calib)
+
+        self.debug = self.args.debug
+
+        self.visualize = self.args.visualize
+
     
     def timesync_callback(self, left_image_msg, right_image_msg):
         try:
@@ -88,15 +101,6 @@ class DepthEstimationModel:
             print(e)
 
         self.left_img, self.right_img, *_ = self.rectify(left_image, right_image)
-        # print(self.left_img.shape, self.right_img.shape)
-        # cv2.imshow("Left Image", self.left_img)
-        # cv2.waitKey(1)
-
-        # cv2.imshow("Right Image", self.right_img)
-        # cv2.waitKey(1)
-
-        # plt.imshow(self.left_img, cmap='gray')
-        # plt.show()
 
 
     def load_model(self):
@@ -113,34 +117,63 @@ class DepthEstimationModel:
         return model
 
     def run_inference(self):
-        print("\n\nInferencing single image")
         if self.left_img is None or self.right_img is None:
             print("No images received yet")
             return
 
         imgL, imgR = self.load_and_process_images(self.left_img, self.right_img)
         imgL, imgR = imgL.unsqueeze(0), imgR.unsqueeze(0)
-    
+
         with torch.no_grad():
             disp_ests = self.model(imgL.to(self.device), imgR.to(self.device))[0]
-        # self.disp_pub.publish(CvBridge().cv2_to_imgmsg(visualize_disp_as_numpy(disp_ests[0]), "passthrough"))
-
+    
         # publish depth image
         depth = self.disp2depth(disp_ests, focal=torch.as_tensor(FOCAL_LENGTH), baseline=torch.as_tensor(BASELINE))
         depth = depth.permute(1, 2, 0).cpu().numpy()
 
-        # print(f"Depth: {depth}")
 
-        # cv2.imshow("Depth Image", depth)
-        # cv2.waitKey(1)
-        print(depth.dtype)
-        img = Float32MultiArray()
-        img.data = [depth]
-        # img = CvBridge().cv2_to_imgmsg(depth, "32FC1")
-        # print(f"\nimg: {img}")
-        self.depth_pub.publish(img)
+        # Visualize using Logarithmic Scaling
+        if self.visualize == 1:
+            # Min-max values range from (1-3000, reason behind using Log scaling). Print for more info
+            depth_log_scaled = np.log2(depth + 1) #One added to remove log(0)  
+            depth_log_scaled = (depth_log_scaled / np.max(depth_log_scaled)) * 255  
+            depth_color = cv2.applyColorMap(depth_log_scaled.astype(np.uint8), cv2.COLORMAP_JET)
+            self.depth_img_msg = CvBridge().cv2_to_imgmsg(depth_color, encoding='bgr8')
+            self.depth_img_pub.publish(self.depth_img_msg)
 
+        #Visualize disparity map using Devansh's visualizer
+        elif self.visualize == 2:
+            disparity_ = visualize_disp_as_numpy(disp_ests[0])
+            depth_color = cv2.applyColorMap(disparity_.astype(np.uint8), cv2.COLORMAP_JET)
+            depth_color = cv2.applyColorMap(disparity_.astype(np.uint8), cv2.COLORMAP_JET)
+            self.depth_img_msg = CvBridge().cv2_to_imgmsg(depth_color, encoding='bgr8')
+            self.depth_img_pub.publish(self.depth_img_msg)
+
+        #Visualize using basic min-max normalization
+        elif self.visualize == 3:
+            depth_normalized = cv2.normalize(depth, None, alpha=0, beta=1, norm_type=cv2.NORM_MINMAX, dtype=cv2.CV_32F)
+            depth_color = cv2.applyColorMap(cv2.convertScaleAbs(depth_normalized, alpha=255), cv2.COLORMAP_JET)
+            self.depth_img_msg = CvBridge().cv2_to_imgmsg(depth_color, encoding='bgr8')
+            self.depth_img_pub.publish(self.depth_img_msg)        
+
+        # Show depth_image if debug is ON
+        if self.debug:
+            
+            depth_log_scaled = visualize_disp_as_numpy(disp_ests[0])
+            depth_color = cv2.applyColorMap(depth_log_scaled.astype(np.uint8), cv2.COLORMAP_JET)
+            self.depth_img_msg = CvBridge().cv2_to_imgmsg(depth_color, encoding='bgr8')
+            self.depth_img_pub.publish(self.depth_img_msg)
+            
+        # Publish depth as array(float)
+        self.publish_depth_array(depth)
         return
+
+    def publish_depth_array(self, depth):
+        
+        self.depth_arr_msg.data = depth.flatten().tolist()
+        self.depth_pub.publish(self.depth_arr_msg)
+        return
+
 
     def depth2disp(self, depth, focal, baseline):
         min_depth = 1e-3
