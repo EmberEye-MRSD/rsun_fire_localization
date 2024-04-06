@@ -82,9 +82,9 @@ class DepthEstimationModel:
         self.depth_arr_msg = Float32MultiArray()
         self.depth_img_msg = Image()
         self.pointcloud_msg = JointState()
-        self.pointcloud_msg.header.seq  = 0
-        # TODO: Correct this according to frame conventions 
-        self.pointcloud_msg.header.frame_id = 'left_camera'
+        # self.pointcloud_msg.header.seq  = 0
+        # # TODO: Correct this according to frame conventions 
+        # self.pointcloud_msg.header.frame_id = 'left_camera'
 
 
         # Time-sync Variables
@@ -105,8 +105,8 @@ class DepthEstimationModel:
             left_image = CvBridge().imgmsg_to_cv2(left_image_msg, "16UC1")
             right_image = CvBridge().imgmsg_to_cv2(right_image_msg, "16UC1")
             # Save Timestamp
-            self.pointcloud_msg.header.stamp = rospy.Time.now()
-            self.pointcloud_msg.header.seq += 1
+            self.pointcloud_msg.header = left_image_msg.header
+            # self.pointcloud_msg.header.seq += 1
             
         except CvBridgeError as e:
             print(e)
@@ -184,7 +184,7 @@ class DepthEstimationModel:
         #         # Depth value as z-coordinate
         #         point.z = depth[y, x] 
         #         self.pointcloud_msg.points.append(point)
-        
+
         self.pointcloud_msg.position = depth.flatten().tolist()
         self.stamped_publisher_.publish(self.pointcloud_msg)
         return
