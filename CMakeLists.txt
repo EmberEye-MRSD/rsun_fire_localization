@@ -8,6 +8,10 @@ project(rsun_fire_localization)
 ## if COMPONENTS list like find_package(catkin REQUIRED COMPONENTS xyz)
 ## is used, also find other catkin packages
 find_package(catkin REQUIRED)
+find_package(OpenCV REQUIRED)
+find_package(Eigen3 REQUIRED)
+find_package(PCL 1.10 REQUIRED)
+
 
 ## System dependencies are found with CMake's conventions
 # find_package(Boost REQUIRED COMPONENTS system)
@@ -15,8 +19,15 @@ find_package(catkin REQUIRED COMPONENTS
    roscpp
    rospy
    std_msgs
+   sensor_msgs
+   tf2_msgs
+   geometry_msgs
+   cv_bridge
+   tf2_ros
+   tf2_sensor_msgs
    message_generation
    message_runtime
+   pcl_ros
 )
 
 ## Uncomment this if the package has a setup.py. This macro ensures
@@ -71,7 +82,10 @@ add_message_files(
 # Generate added messages and services with any dependencies listed here
 generate_messages(
   DEPENDENCIES
-  std_msgs  # Or other packages containing msgs
+  std_msgs
+  sensor_msgs
+  geometry_msgs
+  tf2_msgs
 )
 
 ################################################
@@ -118,10 +132,10 @@ catkin_package(
 
 ## Specify additional locations of header files
 ## Your package locations should be listed before other locations
-include_directories(
-# include
-# ${catkin_INCLUDE_DIRS}
-)
+include_directories(${catkin_INCLUDE_DIRS})
+include_directories(${OpenCV_INCLUDE_DIRS})
+include_directories(${EIGEN3_INCLUDE_DIR})
+include_directories(${PCL_INCLUDE_DIR})
 
 ## Declare a C++ library
 # add_library(${PROJECT_NAME}
@@ -136,11 +150,11 @@ include_directories(
 ## Declare a C++ executable
 ## With catkin_make all packages are built within a single CMake context
 ## The recommended prefix ensures that target names across packages don't collide
-# add_executable(${PROJECT_NAME}_node src/rsun_fire_localization_node.cpp)
+add_executable(${PROJECT_NAME}_realsense_fused src/realsense_fire_localization.cpp)
 
 ## Rename C++ executable without prefix
 ## The above recommended prefix causes long target names, the following renames the
-## target back to the shorter version for ease of user use
+## target back to the shorter vers${PROJECT_NAME}_realsense_fused ion for ease of user use
 ## e.g. "rosrun someones_pkg node" instead of "rosrun someones_pkg someones_pkg_node"
 # set_target_properties(${PROJECT_NAME}_node PROPERTIES OUTPUT_NAME node PREFIX "")
 
@@ -152,6 +166,10 @@ include_directories(
 # target_link_libraries(${PROJECT_NAME}_node
 #   ${catkin_LIBRARIES}
 # )
+target_link_libraries(${PROJECT_NAME}_realsense_fused ${OpenCV_LIBRARIES} ${catkin_LIBRARIES})
+target_link_libraries(${PROJECT_NAME}_realsense_fused ${catkin_LIBRARIES} ${EIGEN3_LIBRARIES})
+target_link_libraries(${PROJECT_NAME}_realsense_fused ${OpenCV_LIBRARIES} ${OpenCV_LIBRARIES})
+target_link_libraries(${PROJECT_NAME}_realsense_fused ${OpenCV_LIBRARIES} ${PCL_LIBRARIES})
 
 #############
 ## Install ##
