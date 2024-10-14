@@ -152,7 +152,7 @@ include_directories(${PCL_INCLUDE_DIR})
 ## The recommended prefix ensures that target names across packages don't collide
 
 add_executable(${PROJECT_NAME}_realsense_fused src/realsense_fire_localization.cpp)
-# add_executable(${PROJECT_NAME}_multi_hotspot src/multi_hotspot_localization.cpp)
+add_executable(${PROJECT_NAME}_multi_hotspot src/multi_hotspot_localization.cpp)
 
 ## Rename C++ executable without prefix
 ## The above recommended prefix causes long target names, the following renames the
@@ -173,10 +173,10 @@ target_link_libraries(${PROJECT_NAME}_realsense_fused ${catkin_LIBRARIES} ${EIGE
 target_link_libraries(${PROJECT_NAME}_realsense_fused ${OpenCV_LIBRARIES} ${OpenCV_LIBRARIES})
 target_link_libraries(${PROJECT_NAME}_realsense_fused ${OpenCV_LIBRARIES} ${PCL_LIBRARIES})
 
-# target_link_libraries(${PROJECT_NAME}_multi_hotspot ${OpenCV_LIBRARIES} ${catkin_LIBRARIES})
-# target_link_libraries(${PROJECT_NAME}_multi_hotspot ${catkin_LIBRARIES} ${EIGEN3_LIBRARIES})
-# target_link_libraries(${PROJECT_NAME}_multi_hotspot ${OpenCV_LIBRARIES} ${OpenCV_LIBRARIES})
-# target_link_libraries(${PROJECT_NAME}_multi_hotspot ${OpenCV_LIBRARIES} ${PCL_LIBRARIES})
+target_link_libraries(${PROJECT_NAME}_multi_hotspot ${OpenCV_LIBRARIES} ${catkin_LIBRARIES})
+target_link_libraries(${PROJECT_NAME}_multi_hotspot ${catkin_LIBRARIES} ${EIGEN3_LIBRARIES})
+target_link_libraries(${PROJECT_NAME}_multi_hotspot ${OpenCV_LIBRARIES} ${OpenCV_LIBRARIES})
+target_link_libraries(${PROJECT_NAME}_multi_hotspot ${OpenCV_LIBRARIES} ${PCL_LIBRARIES})
 
 #############
 ## Install ##
