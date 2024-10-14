@@ -98,11 +98,7 @@ public:
                 }
             }
         }
-
-        // Print the number of points in each cluster
-        for (size_t i = 0; i < filtered_points.size(); ++i) {
-            std::cout << "Number of points in cluster " << i << ": " << filtered_points[i]->points.size() << std::endl;
-        }
+        
     }
 
 
