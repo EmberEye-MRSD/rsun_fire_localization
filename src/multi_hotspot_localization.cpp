@@ -200,7 +200,7 @@ public:
 
 int main(int argc, char** argv)
 {
-    ros::init(argc, argv, "realsense_fire_localization");
+    ros::init(argc, argv, "multi_hotspot_localization");
     RealSenseFireLocalization realsense_fire_localization;
     ros::spin();
     return 0;
