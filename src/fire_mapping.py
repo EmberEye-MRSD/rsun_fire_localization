@@ -12,7 +12,7 @@ import time
 
 class Filter:
     def __init__(self):
-        self.poses_sub = rospy.Subscriber("/hotspots/array", PoseArray, self.hotspots_cb, queue_size=100)
+        self.poses_sub = rospy.Subscriber("/rsun/hotspot/poses", PoseArray, self.hotspots_cb, queue_size=100)
         self.hotspot_pub = rospy.Publisher("/hotspots/global_map", MarkerArray, queue_size=10)
 
         self.all_meas = []
