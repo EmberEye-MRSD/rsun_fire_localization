@@ -62,6 +62,7 @@ public:
 
         realsense_pointcloud_sub = nh.subscribe("/camera/depth/color/points", 1, &RealSenseFireLocalization::pointCloudCallback, this);
         thermal_image_sub = nh.subscribe("/flir_boson/image_raw", 1, &RealSenseFireLocalization::thermalImageCallback, this);
+        odom_sub = nh.subscribe("/vins_estimator/odometry", 1, &RealSenseFireLocalization::thermalImageCallback, this);
     }
 
     void thermalImageCallback(const sensor_msgs::ImageConstPtr& msg) {

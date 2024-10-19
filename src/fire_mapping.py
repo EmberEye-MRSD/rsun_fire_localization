@@ -2,10 +2,14 @@
 import rospy
 import numpy as np
 
+import tf
 from geometry_msgs.msg import PoseArray, Pose
 from visualization_msgs.msg import MarkerArray, Marker
+from nav_msgs.msg import Odometry
 
 import matplotlib.pyplot as plt
+from scipy.spatial.transform import Rotation as R
+import numpy as np
 
 import time
 
@@ -13,16 +17,14 @@ import time
 class Filter:
     def __init__(self):
         self.poses_sub = rospy.Subscriber("/rsun/hotspot/poses", PoseArray, self.hotspots_cb, queue_size=100)
+        self.odom_sub = rospy.Subscriber("/rsun/odometry", Odometry, self.odom_cb, queue_size=100)
         self.hotspot_pub = rospy.Publisher("/hotspots/global_map", MarkerArray, queue_size=10)
 
         self.all_meas = []
         self.odom = []
-        self.nn_idxs = []
 
         self.measurements = [] # list of lists of measurements for each hotspot
         self.global_poses = [] # list of filtered pose for each hotspot
-        # self.measurement_weights = [] # list of lists confidence weights of each measurement for each hotspot
-        # self.total_weights = [] # list of total weights for each hotspot
 
         nn_threshold_param = rospy.get_param('/temporal_mapping/nn_threshold', default=2.5)
         clipping_distance_param = rospy.get_param('/temporal_mapping/clipping_distance', default=6.0)
@@ -43,6 +45,20 @@ class Filter:
         self.distance_weighing = distance_weighing_param # False by default
 
         self.height_threshold = 0.0
+
+        self.T_map_imu = None
+        self.T_camera_thermal = np.array([ [0.9998096,  0.0174518, -0.0087265,  0.048],
+                                [-0.0174524, 0.9998477,  0.0000000, -0.039],
+                                [0.0087252,  0.0001523,  0.9999619, -0.020],
+                                [0,          0,          0,          1]])
+        # self.T_camera_thermal = np.eye(4)
+        # self.T_camera_thermal[0][3] = 0.048
+        # self.T_camera_thermal[1][3] = -0.039
+        # self.T_camera_thermal[2][3] = -0.020
+        self.T_imu_camera = np.array([[0, 0, 1, 0],
+                                        [-1, 0, 0, 0],
+                                        [0, -1, 0, 0],
+                                        [0, 0, 0, 1]])
     
     def distance(self, p1, p2):
         # dist = np.sqrt((p1[0] - p2[0])**2 + (p1[1] - p2[1])**2 + (p1[2] - p2[2])**2)
@@ -77,10 +93,6 @@ class Filter:
         
         return closest_point, idx, min_dist
 
-    def get_weight(self, point, curr_pose):
-        weight = 1.0 / (self.distance(point, curr_pose) - self.hotspot_inflation_radius)
-        return weight
-
     def add_new_hotspot(self, point, curr_pose):
         """
         input: point reading
@@ -89,12 +101,6 @@ class Filter:
         self.all_meas.append(point)
         self.global_poses.append(point)
         self.odom.append(curr_pose)
-        # self.nn_idxs.append(len(self.global_poses))
-
-        if(self.distance_weighing):
-            weight = self.get_weight(point, curr_pose)
-            self.measurement_weights.append([weight])
-            self.total_weights.append(weight)
 
     def update_nn(self, idx, point, curr_pose):
         """
@@ -102,26 +108,14 @@ class Filter:
         """
         self.measurements[idx].append(point)
         self.all_meas.append(point)
-        self.odom.append(curr_pose)
-        self.nn_idxs.append(idx)
-        
+        self.odom.append(curr_pose)   
 
         list_readings = np.array(self.measurements[idx])
         xs = list_readings[:, 0]
         ys = list_readings[:, 1]
         zs = list_readings[:, 2]
 
-        updated_reading = None
-        if(self.distance_weighing):
-            weight = self.get_weight(point, curr_pose)
-            self.measurement_weights[idx].append(weight)
-            self.total_weights[idx] += weight
-            updated_reading = [ np.sum(np.multiply(xs, self.measurement_weights[idx])) / self.total_weights[idx],
-                                np.sum(np.multiply(ys, self.measurement_weights[idx])) / self.total_weights[idx],
-                                np.sum(np.multiply(zs, self.measurement_weights[idx])) / self.total_weights[idx]]
-
-        else:            
-            updated_reading = [np.mean(xs), np.mean(ys), np.mean(zs)]
+        updated_reading = [np.mean(xs), np.mean(ys), np.mean(zs)]
 
         self.global_poses[idx] = updated_reading
     
@@ -147,7 +141,7 @@ class Filter:
         marker.color.a = 0.5
 
         marker.header.stamp = rospy.Time.now()
-        marker.header.frame_id = "odom"
+        marker.header.frame_id = "map"
         marker.ns = "predicted_hotspots"
         marker.id = i
         marker.type = Marker.SPHERE
@@ -172,48 +166,36 @@ class Filter:
                 self.global_poses.pop(i)
 
     def update_global_poses(self, poses_reading):
-        # print(poses_reading[1:])
-        # gt = np.array([[49.833, 0, 0], [49.833, -27.583, 0], [24.833, -57.333, 0], [11.083, -41.833, 0]]) # config 1
-        gt = np.array([[30.083, -15.75, 0], [38.5, -37.33, 0], [16.917, -37.33, 0], [2.167, -18.75, 0]]) # config 2
-
-        # print("# global poses : ", len(self.global_poses))
-        if len(self.global_poses):
-            print("Number of global hotspots : ", len(self.global_poses))
-        #     # plt.scatter(-np.array(self.global_poses)[:, 1], np.array(self.global_poses)[:, 0], c='g')
-            for i in range(len(self.global_poses)):
-                print(f"Measurements for hotspot {i} : ", len(self.measurements[i]))
-        #         plt.scatter(-np.array(self.measurements[i])[:, 1], np.array(self.measurements[i])[:, 0], c='r')
-
-        #     for i in range(gt.shape[0]):
-        #         plt.scatter(-np.array(gt)[:, 1] * 0.3048, np.array(gt)[:, 0] * 0.3048, c='b')
-        #     plt.savefig('scatter_temporal.png')
-
-        # print("Readings : ", poses_reading)
-        
-        curr_pose = [poses_reading[0].position.x,
-                    poses_reading[0].position.y,
-                    poses_reading[0].position.z]
-
-        for pose in poses_reading[1:]:
-            
-
+        print("--------------- Starting new frame ---------------")
+        for pose in poses_reading.poses:
             # get each new hotspot reading
             x = pose.position.x
             y = pose.position.y
             z = pose.position.z
             point = [x, y, z]
+            curr_pose = [self.T_map_imu[0][3], self.T_map_imu[1][3], self.T_map_imu[2][3]]
+            # plt.scatter([x], [y])
 
-            if z > self.height_threshold:
-                continue
+            print("Total hotspots: ", len(self.measurements))
+
+            # if len(self.global_poses) == 0:
+                # print("[INFO] Initializing NN tree")
+                # self.global_poses.append(point)
+                # continue
+            # if z > self.height_threshold:
+                # continue
 
             if self.isFar(curr_pose, point):
-                print("Point too far : ", point, curr_pose)
+                # print("Point too far : ", point, curr_pose)
                 # print("Threshold : ", self.clipping_distance)
                 continue
 
             # check if any existing hotspot exists nearby
             nn, idx, nn_dist = self.find_closest_hotspot(point)
-
+            # print("NN: ", nn)
+            # print("NN dist: ", nn_dist)
+            # print("idx: ", idx)
+            
             # use new reading to update existing hotspot, or add new hotspot
             if (nn_dist < self.nn_thresh) and (idx is not None):
                 print("Updating hotspot : ", point)
@@ -226,11 +208,58 @@ class Filter:
         # self.outlier_rejection()
 
         # publish MarkerArray
+        plt.xlim(-5, 30)
+        plt.ylim(-5, 30)
+        plt.savefig('/home/jaskaran/catkin_ws/src/rsun_fire_localization/src/scatter.png')
         self.publish_updated_hotspots()
 
+    def odom_cb(self, msg):
+        # transform hotspot to map frame
+        x = msg.pose.pose.position.x
+        y = msg.pose.pose.position.y
+        z = msg.pose.pose.position.z
+        self.T_odom = np.array([x, y, z]).reshape((3, 1))
+
+        quaternion = [
+            msg.pose.pose.orientation.x,
+            msg.pose.pose.orientation.y,
+            msg.pose.pose.orientation.z,
+            msg.pose.pose.orientation.w]
+        self.R_odom = R.from_quat(quaternion).as_matrix()
+        
+        RT = np.hstack((self.R_odom, self.T_odom))
+        self.T_map_imu = np.vstack((RT, np.array([0, 0, 0, 1])))
+
+    def get_pose_in_map(self, pose):
+        T_thermal_hotspot = np.array([pose.x, pose.y, pose.z, 1])
+        # T_thermal_hotspot = np.array([0, 0, 1, 1])
+        # print("Hotspot in thermal: ", T_thermal_hotspot.reshape((4,1)))
+        # print("Hotspot in camera: ", self.T_camera_thermal @ T_thermal_hotspot.reshape((4,1)))
+        # print("Hotspot in IMU: ", self.T_imu_camera @ self.T_camera_thermal @ T_thermal_hotspot.reshape((4,1)))
+        # IMU in Map
+        plt.scatter([self.T_map_imu[0][3]], [self.T_map_imu[1][3]], color="red")
+        # Thermal in Map
+        plt.scatter([(self.T_map_imu @ self.T_imu_camera @ self.T_camera_thermal)[0][3]], [(self.T_map_imu @ self.T_imu_camera @ self.T_camera_thermal)[1][3]], color="blue")
+        # Hotspot in Map
+        plt.scatter([(self.T_map_imu @ self.T_imu_camera @ self.T_camera_thermal @ T_thermal_hotspot.reshape((4,1)))[0]], 
+                    [(self.T_map_imu @ self.T_imu_camera @ self.T_camera_thermal @ T_thermal_hotspot.reshape((4,1)))[1]], color="green")
+        # plt.scatter([T_thermal_hotspot[0]], [T_thermal_hotspot[1]], color="red")
+        # plt.scatter([(self.T_imu_camera.T @ self.T_camera_thermal @ T_thermal_hotspot)[0]],
+                    # [(self.T_imu_camera.T @ self.T_camera_thermal @ T_thermal_hotspot)[1]], color="blue")
+        return self.T_map_imu @ self.T_imu_camera @ self.T_camera_thermal @ T_thermal_hotspot.reshape((4,1))
+    
     def hotspots_cb(self, msg):
+        if self.T_map_imu is None:
+            return
+        
         poses_reading = msg.poses
-        self.update_global_poses(poses_reading)
+        poses_reading_map_frame = PoseArray()
+        for hotspot in poses_reading:
+            hotspot_global = self.get_pose_in_map(hotspot.position).flatten()
+            p = Pose()
+            p.position.x, p.position.y, p.position.z = hotspot_global[0], hotspot_global[1], hotspot_global[2]
+            poses_reading_map_frame.poses.append(p)
+        self.update_global_poses(poses_reading_map_frame)
 
 def main():
     rospy.init_node("temporal_mapping")
@@ -242,7 +271,6 @@ def main():
     #     np.save("meas.npy", filter.all_meas)
     #     np.save("hotspots.npy", filter.global_poses)
     #     np.save("odom.npy", filter.odom)
-    #     np.save("nn_idxs.npy", filter.nn_idxs)
 
     #     exit()
 
