@@ -46,7 +46,7 @@ class Filter:
 
         self.height_threshold = 0.0
 
-        self.T_map_imu = None
+        self.T_map_imu_init, self.T_map_imu = None, None
         self.T_camera_thermal = np.array([ [0.9998096,  0.0174518, -0.0087265,  0.048],
                                 [-0.0174524, 0.9998477,  0.0000000, -0.039],
                                 [0.0087252,  0.0001523,  0.9999619, -0.020],
@@ -55,7 +55,7 @@ class Filter:
         # self.T_camera_thermal[0][3] = 0.048
         # self.T_camera_thermal[1][3] = -0.039
         # self.T_camera_thermal[2][3] = -0.020
-        self.T_imu_camera = np.array([[0, 0, 1, 0],
+        self.T_imu_camera = np.array([  [0, 0, 1, 0],
                                         [-1, 0, 0, 0],
                                         [0, -1, 0, 0],
                                         [0, 0, 0, 1]])
@@ -228,7 +228,10 @@ class Filter:
         self.R_odom = R.from_quat(quaternion).as_matrix()
         
         RT = np.hstack((self.R_odom, self.T_odom))
-        self.T_map_imu = np.vstack((RT, np.array([0, 0, 0, 1])))
+        if self.T_map_imu is None:
+            self.T_map_imu_init = np.vstack((RT, np.array([0, 0, 0, 1])))
+        
+        self.T_map_imu = np.linalg.inv(self.T_map_imu_init) @ np.vstack((RT, np.array([0, 0, 0, 1])))
 
     def get_pose_in_map(self, pose):
         T_thermal_hotspot = np.array([pose.x, pose.y, pose.z, 1])
