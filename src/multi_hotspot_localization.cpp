@@ -62,13 +62,14 @@ public:
 
         realsense_pointcloud_sub = nh.subscribe("/camera/depth/color/points", 1, &RealSenseFireLocalization::pointCloudCallback, this);
         thermal_image_sub = nh.subscribe("/flir_boson/image_raw", 1, &RealSenseFireLocalization::thermalImageCallback, this);
-        odom_sub = nh.subscribe("/vins_estimator/odometry", 1, &RealSenseFireLocalization::thermalImageCallback, this);
+        // odom_sub = nh.subscribe("/vins_estimator/odometry", 1, &RealSenseFireLocalization::thermalImageCallback, this);
     }
 
     void thermalImageCallback(const sensor_msgs::ImageConstPtr& msg) {
         try {
             cv_bridge::CvImagePtr cv_ptr = cv_bridge::toCvCopy(msg, "16UC1");
-            cv::threshold(cv_ptr->image, mask, 23000, 255, cv::THRESH_BINARY);
+            cv::threshold(cv_ptr->image, mask, 24000, 255, cv::THRESH_BINARY);
+            // cv::threshold(cv_ptr->image, mask, 23000, 255, cv::THRESH_BINARY);
             mask.convertTo(mask, CV_8U);
 
             findClusters(mask, mask_clusters);
