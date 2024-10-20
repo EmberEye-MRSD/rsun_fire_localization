@@ -55,6 +55,10 @@ class Filter:
                                         [0, -1, 0, 0],
                                         [0, 0, 0, 1]])
         self.T_imu_thermal = self.T_imu_camera @ self.T_camera_thermal
+
+
+        self.odom_ts = None
+        self.hotspot_ts = None
     
     def distance(self, p1, p2):
         # dist = np.sqrt((p1[0] - p2[0])**2 + (p1[1] - p2[1])**2 + (p1[2] - p2[2])**2)
@@ -197,10 +201,15 @@ class Filter:
         # self.outlier_rejection()
 
         # publish MarkerArray
-        plt.xlim(-5, 30)
-        plt.ylim(-5, 30)
-        plt.savefig('/home/jaskaran/catkin_ws/src/rsun_fire_localization/src/scatter.png')
+        plt.xlim(-1, 5)
+        plt.ylim(-1, 5)
+        plt.savefig('/home/shashwat/kalibr_workspace/src/rsun_fire_localization/plots/scatter.png')
         self.publish_updated_hotspots()
+
+    def hotspots_cb(self, msg):
+        self.hotspot_ts = float(msg.header.stamp.to_sec())
+        self.poses_reading = msg.poses
+    
 
     def odom_cb(self, msg):
         self.odom_ts = float(msg.header.stamp.to_sec())
@@ -217,6 +226,8 @@ class Filter:
             msg.pose.pose.orientation.w]
         
         self.R_odom = R.from_quat(quaternion).as_matrix()
+
+        # self.R_odom = np.eye(4)
         
     def get_pose_in_map(self, pose):
         T_thermal_hotspot = np.array([pose.x, pose.y, pose.z, 1])
@@ -231,13 +242,18 @@ class Filter:
 
         return self.T_map_imu @ self.T_imu_thermal @ T_thermal_hotspot.reshape((4,1))
     
-    def hotspots_cb(self, msg):
-        self.poses_reading = msg.poses
     
     def run(self, event=None):
+        
+        
         if self.T_odom is None or self.R_odom is None or len(self.poses_reading) == 0:
             return
         
+        if abs(self.odom_ts - self.hotspot_ts) > 0.1:
+            print(f"[WARN][RUN()] High Time diff :{abs(self.odom_ts - self.hotspot_ts)}")
+            return
+
+
         RT = np.hstack((self.R_odom, self.T_odom))
         if self.T_map_imu is None:
             self.T_map_imu_init_inv = np.linalg.inv(np.vstack((RT, np.array([0, 0, 0, 1]))))
@@ -250,6 +266,9 @@ class Filter:
             p.position.x, p.position.y, p.position.z = hotspot_global[0], hotspot_global[1], hotspot_global[2]
             poses_reading_map_frame.poses.append(p)
         self.update_global_poses(poses_reading_map_frame)
+
+        # self.T_odom = self.R_odom = None
+        # self.poses_reading = []
 
 def main():
     rospy.init_node("temporal_mapping")
