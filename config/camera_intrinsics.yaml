@@ -1,0 +1,10 @@
+parent_frame: "camera_depth_optical_frame"
+child_frame: "flir_boson_optical_frame"
+
+x: 0.048
+y: -0.039
+z: -0.020
+
+roll: -0.0174533
+pitch: -0.00872665
+yaw: 0.0

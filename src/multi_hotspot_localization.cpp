@@ -1,7 +1,10 @@
 #include <vector>
+#include <iostream>
+#include <random>
+#include <Eigen/Dense>
+
 #include <ros/ros.h>
 #include <opencv2/opencv.hpp>
-#include <Eigen/Dense>
 
 #include <sensor_msgs/Image.h>
 #include <sensor_msgs/PointCloud2.h>
@@ -23,7 +26,6 @@
 #include <pcl/segmentation/extract_clusters.h>
 #include <pcl/point_types_conversion.h>
 
-#include <random>
 
 class RealSenseFireLocalization
 {
@@ -53,6 +55,13 @@ private:
     tf2_ros::Buffer tf_buffer;
     tf2_ros::TransformListener tfListener;
 
+    double hotspot_threshold;
+
+
+    // temp variables
+    cv::Mat mask_clusters_image;
+    ros::Publisher mask_clusters_pub;
+
 public:
     RealSenseFireLocalization() : tfListener(tf_buffer)
     {
@@ -60,19 +69,43 @@ public:
         fire_pointcloud_pub = nh.advertise<sensor_msgs::PointCloud2>("/fire_point_cloud", 1);
         hotspots_pose_array_pub = nh.advertise<geometry_msgs::PoseArray>("/rsun/hotspot/poses", 1);
 
-        realsense_pointcloud_sub = nh.subscribe("/camera/depth/color/points", 1, &RealSenseFireLocalization::pointCloudCallback, this);
+        realsense_pointcloud_sub = nh.subscribe("/camera/depth/color/downsampled_points", 1, &RealSenseFireLocalization::pointCloudCallback, this);
         thermal_image_sub = nh.subscribe("/flir_boson/image_raw", 1, &RealSenseFireLocalization::thermalImageCallback, this);
-        // odom_sub = nh.subscribe("/vins_estimator/odometry", 1, &RealSenseFireLocalization::thermalImageCallback, this);
+
+        // Get the initial value of the threshold parameter from the parameter server
+        if (!nh.getParam("/hotspot_thres", hotspot_threshold)) {
+            ROS_WARN("Parameter /hotspot_thres not set, using default value of 24500");
+            nh.setParam("/hotspot_thres", 24500);
+            hotspot_threshold = 24500;
+        }
+
+        // temp pub for mask clusters
+        mask_clusters_pub = nh.advertise<sensor_msgs::Image>("/mask_clusters", 1);
     }
 
     void thermalImageCallback(const sensor_msgs::ImageConstPtr& msg) {
         try {
+            // Update the threshold value from the parameter server before applying threshold
+            nh.getParam("/hotspot_thres", hotspot_threshold);
+
             cv_bridge::CvImagePtr cv_ptr = cv_bridge::toCvCopy(msg, "16UC1");
-            cv::threshold(cv_ptr->image, mask, 24000, 255, cv::THRESH_BINARY);
-            // cv::threshold(cv_ptr->image, mask, 23000, 255, cv::THRESH_BINARY);
+
+            cv::threshold(cv_ptr->image, mask, hotspot_threshold, 255, cv::THRESH_BINARY);
             mask.convertTo(mask, CV_8U);
 
             findClusters(mask, mask_clusters);
+
+            // print the number of clusters
+            ROS_INFO("Number of clusters: %zu", mask_clusters.size());
+
+            // cnvert the mask image to ros image msg
+            cv_bridge::CvImage mask_clusters_image_msg;
+            mask_clusters_image_msg.header.stamp = ros::Time::now();
+            mask_clusters_image_msg.header.frame_id = "flir_boson_optical_frame";
+            mask_clusters_image_msg.encoding = sensor_msgs::image_encodings::MONO8;
+            mask_clusters_image_msg.image = mask.clone();
+            mask_clusters_pub.publish(mask_clusters_image_msg.toImageMsg());
+
 
         } catch (cv_bridge::Exception& e) {
             ROS_ERROR("cv_bridge exception: %s", e.what());
