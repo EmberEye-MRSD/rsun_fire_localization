@@ -30,11 +30,11 @@ class Filter:
         hotspot_inflation_radius_param = rospy.get_param('/temporal_mapping/hotspot_inflation_radius', default=0.0)
         distance_weighing_param = rospy.get_param('/temporal_mapping/distance_weighing', default=False)
 
-        #print("[INFO] nn_threshold :", nn_threshold_param)
-        #print("[INFO] clipping_distance :", clipping_distance_param)
+        print("[INFO] nn_threshold :", nn_threshold_param)
+        print("[INFO] clipping_distance :", clipping_distance_param)
         # #print("[INFO] outlier_frame_threshold :", outlier_frame_threshold_param)
-        #print("[INFO] hotspot_inflation_radius :", hotspot_inflation_radius_param)
-        #print("[INFO] distance_weighing :", distance_weighing_param)
+        print("[INFO] hotspot_inflation_radius :", hotspot_inflation_radius_param)
+        print("[INFO] distance_weighing :", distance_weighing_param)
 
         self.nn_thresh = nn_threshold_param # nn radius in meters
         self.clipping_distance = clipping_distance_param # clipping distance for thermal stereo depth
@@ -181,15 +181,10 @@ class Filter:
                 # continue
 
             if self.isFar(curr_pose, point):
-                # #print("Point too far : ", point, curr_pose)
-                # #print("Threshold : ", self.clipping_distance)
                 continue
 
             # check if any existing hotspot exists nearby
             nn, idx, nn_dist = self.find_closest_hotspot(point)
-            # #print("NN: ", nn)
-            # #print("NN dist: ", nn_dist)
-            # #print("idx: ", idx)
             
             # use new reading to update existing hotspot, or add new hotspot
             if (nn_dist < self.nn_thresh) and (idx is not None):
@@ -203,8 +198,8 @@ class Filter:
         # self.outlier_rejection()
 
         # publish MarkerArray
-        # plt.xlim(-5, 30)
-        # plt.ylim(-5, 30)
+        plt.xlim(-5, 30)
+        plt.ylim(-5, 30)
         plt.savefig('/home/jaskaran/catkin_ws/src/rsun_fire_localization/src/scatter.png')
         self.publish_updated_hotspots()
 
