@@ -2,7 +2,6 @@
 import rospy
 import numpy as np
 
-import tf
 from geometry_msgs.msg import PoseArray, Pose
 from visualization_msgs.msg import MarkerArray, Marker
 from nav_msgs.msg import Odometry
@@ -12,7 +11,6 @@ from scipy.spatial.transform import Rotation as R
 import numpy as np
 
 import time
-
 
 class Filter:
     def __init__(self):
@@ -46,19 +44,17 @@ class Filter:
 
         self.height_threshold = 0.0
 
-        self.T_map_imu_init, self.T_map_imu = None, None
+        self.T_map_imu_init_inv, self.T_map_imu = None, None
+        self.T_odom, self.R_odom = None, None
         self.T_camera_thermal = np.array([ [0.9998096,  0.0174518, -0.0087265,  0.048],
                                 [-0.0174524, 0.9998477,  0.0000000, -0.039],
                                 [0.0087252,  0.0001523,  0.9999619, -0.020],
                                 [0,          0,          0,          1]])
-        # self.T_camera_thermal = np.eye(4)
-        # self.T_camera_thermal[0][3] = 0.048
-        # self.T_camera_thermal[1][3] = -0.039
-        # self.T_camera_thermal[2][3] = -0.020
         self.T_imu_camera = np.array([  [0, 0, 1, 0],
                                         [-1, 0, 0, 0],
                                         [0, -1, 0, 0],
                                         [0, 0, 0, 1]])
+        self.T_imu_thermal = self.T_imu_camera @ self.T_camera_thermal
     
     def distance(self, p1, p2):
         # dist = np.sqrt((p1[0] - p2[0])**2 + (p1[1] - p2[1])**2 + (p1[2] - p2[2])**2)
@@ -85,7 +81,6 @@ class Filter:
 
         for i, hotspot_pose in enumerate(self.global_poses):
             dist = self.distance(point, hotspot_pose)
-            # print(f"Distance to hotspot", hotspot_pose, )
             if dist < min_dist:
                 min_dist = dist
                 closest_point = hotspot_pose
@@ -208,8 +203,8 @@ class Filter:
         # self.outlier_rejection()
 
         # publish MarkerArray
-        plt.xlim(-5, 30)
-        plt.ylim(-5, 30)
+        # plt.xlim(-5, 30)
+        # plt.ylim(-5, 30)
         plt.savefig('/home/jaskaran/catkin_ws/src/rsun_fire_localization/src/scatter.png')
         self.publish_updated_hotspots()
 
@@ -227,37 +222,33 @@ class Filter:
             msg.pose.pose.orientation.w]
         self.R_odom = R.from_quat(quaternion).as_matrix()
         
-        RT = np.hstack((self.R_odom, self.T_odom))
-        if self.T_map_imu is None:
-            self.T_map_imu_init = np.vstack((RT, np.array([0, 0, 0, 1])))
-        
-        self.T_map_imu = np.linalg.inv(self.T_map_imu_init) @ np.vstack((RT, np.array([0, 0, 0, 1])))
-
     def get_pose_in_map(self, pose):
         T_thermal_hotspot = np.array([pose.x, pose.y, pose.z, 1])
-        # T_thermal_hotspot = np.array([0, 0, 1, 1])
-        # print("Hotspot in thermal: ", T_thermal_hotspot.reshape((4,1)))
-        # print("Hotspot in camera: ", self.T_camera_thermal @ T_thermal_hotspot.reshape((4,1)))
-        # print("Hotspot in IMU: ", self.T_imu_camera @ self.T_camera_thermal @ T_thermal_hotspot.reshape((4,1)))
+
         # IMU in Map
         plt.scatter([self.T_map_imu[0][3]], [self.T_map_imu[1][3]], color="red")
         # Thermal in Map
-        plt.scatter([(self.T_map_imu @ self.T_imu_camera @ self.T_camera_thermal)[0][3]], [(self.T_map_imu @ self.T_imu_camera @ self.T_camera_thermal)[1][3]], color="blue")
+        plt.scatter([(self.T_map_imu @ self.T_imu_thermal)[0][3]], [(self.T_map_imu @ self.T_imu_thermal)[1][3]], color="blue")
         # Hotspot in Map
-        plt.scatter([(self.T_map_imu @ self.T_imu_camera @ self.T_camera_thermal @ T_thermal_hotspot.reshape((4,1)))[0]], 
-                    [(self.T_map_imu @ self.T_imu_camera @ self.T_camera_thermal @ T_thermal_hotspot.reshape((4,1)))[1]], color="green")
-        # plt.scatter([T_thermal_hotspot[0]], [T_thermal_hotspot[1]], color="red")
-        # plt.scatter([(self.T_imu_camera.T @ self.T_camera_thermal @ T_thermal_hotspot)[0]],
-                    # [(self.T_imu_camera.T @ self.T_camera_thermal @ T_thermal_hotspot)[1]], color="blue")
-        return self.T_map_imu @ self.T_imu_camera @ self.T_camera_thermal @ T_thermal_hotspot.reshape((4,1))
+        plt.scatter([(self.T_map_imu @ self.T_imu_thermal @ T_thermal_hotspot.reshape((4,1)))[0]], 
+                    [(self.T_map_imu @ self.T_imu_thermal @ T_thermal_hotspot.reshape((4,1)))[1]], color="green")
+
+        return self.T_map_imu @ self.T_imu_thermal @ T_thermal_hotspot.reshape((4,1))
     
     def hotspots_cb(self, msg):
-        if self.T_map_imu is None:
+        self.poses_reading = msg.poses
+    
+    def run(self, event=None):
+        if self.T_odom is None or self.R_odom is None or len(self.poses_reading) == 0:
             return
         
-        poses_reading = msg.poses
+        RT = np.hstack((self.R_odom, self.T_odom))
+        if self.T_map_imu is None:
+            self.T_map_imu_init_inv = np.linalg.inv(np.vstack((RT, np.array([0, 0, 0, 1]))))
+        self.T_map_imu = self.T_map_imu_init_inv @ np.vstack((RT, np.array([0, 0, 0, 1])))
+        
         poses_reading_map_frame = PoseArray()
-        for hotspot in poses_reading:
+        for hotspot in self.poses_reading:
             hotspot_global = self.get_pose_in_map(hotspot.position).flatten()
             p = Pose()
             p.position.x, p.position.y, p.position.z = hotspot_global[0], hotspot_global[1], hotspot_global[2]
@@ -267,15 +258,9 @@ class Filter:
 def main():
     rospy.init_node("temporal_mapping")
     filter = Filter()
+
+    rospy.Timer(rospy.Duration(1.0/30.0), filter.run)
     rospy.spin()
-
-    # while rospy.is_shutdown():
-        
-    #     np.save("meas.npy", filter.all_meas)
-    #     np.save("hotspots.npy", filter.global_poses)
-    #     np.save("odom.npy", filter.odom)
-
-    #     exit()
 
 if __name__ == "__main__":
     main()
