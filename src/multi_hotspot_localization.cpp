@@ -74,9 +74,9 @@ public:
 
         // Get the initial value of the threshold parameter from the parameter server
         if (!nh.getParam("/hotspot_thres", hotspot_threshold)) {
-            ROS_WARN("Parameter /hotspot_thres not set, using default value of 24000");
-            nh.setParam("/hotspot_thres", 24000);
-            hotspot_threshold = 24000;
+            ROS_WARN("Parameter /hotspot_thres not set, using default value of 24500");
+            nh.setParam("/hotspot_thres", 24500);
+            hotspot_threshold = 24500;
         }
 
         // temp pub for mask clusters
@@ -235,7 +235,7 @@ public:
 
 int main(int argc, char** argv)
 {
-    ros::init(argc, argv, "realsense_fire_localization");
+    ros::init(argc, argv, "multi_hotspot_localization");
     RealSenseFireLocalization realsense_fire_localization;
     ros::spin();
     return 0;
