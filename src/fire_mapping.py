@@ -161,7 +161,7 @@ class Filter:
                 self.global_poses.pop(i)
 
     def update_global_poses(self, poses_reading):
-        #print("--------------- Starting new frame ---------------")
+        print("--------------- Starting new frame ---------------")
         for pose in poses_reading.poses:
             # get each new hotspot reading
             x = pose.position.x
@@ -169,7 +169,6 @@ class Filter:
             z = pose.position.z
             point = [x, y, z]
             curr_pose = [self.T_map_imu[0][3], self.T_map_imu[1][3], self.T_map_imu[2][3]]
-            # plt.scatter([x], [y])
 
             #print("Total hotspots: ", len(self.measurements))
 
