@@ -14,8 +14,8 @@ import time
 
 class Filter:
     def __init__(self):
-        self.poses_sub = rospy.Subscriber("/rsun/hotspot/poses", PoseArray, self.hotspots_cb, queue_size=100)
-        self.odom_sub = rospy.Subscriber("/rsun/odometry", Odometry, self.odom_cb, queue_size=100)
+        self.poses_sub = rospy.Subscriber("/rsun/hotspot/poses", PoseArray, self.hotspots_cb, queue_size=1)
+        self.odom_sub = rospy.Subscriber("/rsun/odometry", Odometry, self.odom_cb, queue_size=1)
         self.hotspot_pub = rospy.Publisher("/hotspots/global_map", MarkerArray, queue_size=10)
 
         self.all_meas = []
@@ -30,11 +30,11 @@ class Filter:
         hotspot_inflation_radius_param = rospy.get_param('/temporal_mapping/hotspot_inflation_radius', default=0.0)
         distance_weighing_param = rospy.get_param('/temporal_mapping/distance_weighing', default=False)
 
-        print("[INFO] nn_threshold :", nn_threshold_param)
-        print("[INFO] clipping_distance :", clipping_distance_param)
-        # print("[INFO] outlier_frame_threshold :", outlier_frame_threshold_param)
-        print("[INFO] hotspot_inflation_radius :", hotspot_inflation_radius_param)
-        print("[INFO] distance_weighing :", distance_weighing_param)
+        #print("[INFO] nn_threshold :", nn_threshold_param)
+        #print("[INFO] clipping_distance :", clipping_distance_param)
+        # #print("[INFO] outlier_frame_threshold :", outlier_frame_threshold_param)
+        #print("[INFO] hotspot_inflation_radius :", hotspot_inflation_radius_param)
+        #print("[INFO] distance_weighing :", distance_weighing_param)
 
         self.nn_thresh = nn_threshold_param # nn radius in meters
         self.clipping_distance = clipping_distance_param # clipping distance for thermal stereo depth
@@ -161,7 +161,7 @@ class Filter:
                 self.global_poses.pop(i)
 
     def update_global_poses(self, poses_reading):
-        print("--------------- Starting new frame ---------------")
+        #print("--------------- Starting new frame ---------------")
         for pose in poses_reading.poses:
             # get each new hotspot reading
             x = pose.position.x
@@ -171,32 +171,32 @@ class Filter:
             curr_pose = [self.T_map_imu[0][3], self.T_map_imu[1][3], self.T_map_imu[2][3]]
             # plt.scatter([x], [y])
 
-            print("Total hotspots: ", len(self.measurements))
+            #print("Total hotspots: ", len(self.measurements))
 
             # if len(self.global_poses) == 0:
-                # print("[INFO] Initializing NN tree")
+                # #print("[INFO] Initializing NN tree")
                 # self.global_poses.append(point)
                 # continue
             # if z > self.height_threshold:
                 # continue
 
             if self.isFar(curr_pose, point):
-                # print("Point too far : ", point, curr_pose)
-                # print("Threshold : ", self.clipping_distance)
+                # #print("Point too far : ", point, curr_pose)
+                # #print("Threshold : ", self.clipping_distance)
                 continue
 
             # check if any existing hotspot exists nearby
             nn, idx, nn_dist = self.find_closest_hotspot(point)
-            # print("NN: ", nn)
-            # print("NN dist: ", nn_dist)
-            # print("idx: ", idx)
+            # #print("NN: ", nn)
+            # #print("NN dist: ", nn_dist)
+            # #print("idx: ", idx)
             
             # use new reading to update existing hotspot, or add new hotspot
             if (nn_dist < self.nn_thresh) and (idx is not None):
-                print("Updating hotspot : ", point)
+                #print("Updating hotspot : ", point)
                 self.update_nn(idx, point, curr_pose)
             else:
-                print("Adding new hotspot : ", point)
+                #print("Adding new hotspot : ", point)
                 self.add_new_hotspot(point, curr_pose)
             
         # remove outliers (frame jumps)
@@ -209,6 +209,7 @@ class Filter:
         self.publish_updated_hotspots()
 
     def odom_cb(self, msg):
+        self.odom_ts = float(msg.header.stamp.to_sec())
         # transform hotspot to map frame
         x = msg.pose.pose.position.x
         y = msg.pose.pose.position.y
@@ -220,6 +221,7 @@ class Filter:
             msg.pose.pose.orientation.y,
             msg.pose.pose.orientation.z,
             msg.pose.pose.orientation.w]
+        
         self.R_odom = R.from_quat(quaternion).as_matrix()
         
     def get_pose_in_map(self, pose):
