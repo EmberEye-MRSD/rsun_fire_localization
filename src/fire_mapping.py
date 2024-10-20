@@ -28,19 +28,16 @@ class Filter:
         clipping_distance_param = rospy.get_param('/temporal_mapping/clipping_distance', default=6.0)
         # outlier_frame_threshold_param = rospy.get_param('/outlier_frame_threshold', default=5)
         hotspot_inflation_radius_param = rospy.get_param('/temporal_mapping/hotspot_inflation_radius', default=0.0)
-        distance_weighing_param = rospy.get_param('/temporal_mapping/distance_weighing', default=False)
 
         print("[INFO] nn_threshold :", nn_threshold_param)
         print("[INFO] clipping_distance :", clipping_distance_param)
         # #print("[INFO] outlier_frame_threshold :", outlier_frame_threshold_param)
         print("[INFO] hotspot_inflation_radius :", hotspot_inflation_radius_param)
-        print("[INFO] distance_weighing :", distance_weighing_param)
 
         self.nn_thresh = nn_threshold_param # nn radius in meters
         self.clipping_distance = clipping_distance_param # clipping distance for thermal stereo depth
         # self.outlier_frame_threshold = outlier_frame_threshold_param # number of frames for a hotspot to be considered legit
         self.hotspot_inflation_radius = hotspot_inflation_radius_param # in the worst case, min dist between drone and hotspot
-        self.distance_weighing = distance_weighing_param # False by default
 
         self.height_threshold = 0.0
 
@@ -226,8 +223,6 @@ class Filter:
             msg.pose.pose.orientation.w]
         
         self.R_odom = R.from_quat(quaternion).as_matrix()
-
-        # self.R_odom = np.eye(4)
         
     def get_pose_in_map(self, pose):
         T_thermal_hotspot = np.array([pose.x, pose.y, pose.z, 1])
@@ -245,14 +240,12 @@ class Filter:
     
     def run(self, event=None):
         
-        
         if self.T_odom is None or self.R_odom is None or len(self.poses_reading) == 0:
             return
         
         if abs(self.odom_ts - self.hotspot_ts) > 0.1:
             print(f"[WARN][RUN()] High Time diff :{abs(self.odom_ts - self.hotspot_ts)}")
             return
-
 
         RT = np.hstack((self.R_odom, self.T_odom))
         if self.T_map_imu is None:
