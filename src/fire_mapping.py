@@ -162,7 +162,7 @@ class Filter:
                 self.global_poses.pop(i)
 
     def update_global_poses(self, poses_reading):
-        print("--------------- Starting new frame ---------------")
+        # print("--------------- Starting new frame ---------------")
         for pose in poses_reading.poses:
             # get each new hotspot reading
             x = pose.position.x
@@ -198,9 +198,9 @@ class Filter:
         # self.outlier_rejection()
 
         # publish MarkerArray
-        plt.xlim(-1, 5)
-        plt.ylim(-1, 5)
-        plt.savefig('/home/shashwat/kalibr_workspace/src/rsun_fire_localization/plots/scatter.png')
+        plt.xlim(-5, 5)
+        plt.ylim(-5, 5)
+        plt.savefig('/home/phoenix/ros_ws/src/rsun_fire_localization/plots/scatter.png')
         self.publish_updated_hotspots()
 
     def hotspots_cb(self, msg):
@@ -221,13 +221,14 @@ class Filter:
             msg.pose.pose.orientation.y,
             msg.pose.pose.orientation.z,
             msg.pose.pose.orientation.w]
-        
         self.R_odom = R.from_quat(quaternion).as_matrix()
         
     def get_pose_in_map(self, pose):
         T_thermal_hotspot = np.array([pose.x, pose.y, pose.z, 1])
-
+        
+        # T_thermal_hotspot = np.array([0, 0, 1, 1])
         # IMU in Map
+        # print(self.T_map_imu)
         plt.scatter([self.T_map_imu[0][3]], [self.T_map_imu[1][3]], color="red")
         # Thermal in Map
         plt.scatter([(self.T_map_imu @ self.T_imu_thermal)[0][3]], [(self.T_map_imu @ self.T_imu_thermal)[1][3]], color="blue")
@@ -239,21 +240,25 @@ class Filter:
     
     
     def run(self, event=None):
-        
+        if self.poses_reading is None:
+            return
         if self.T_odom is None or self.R_odom is None or len(self.poses_reading) == 0:
             return
         
-        if abs(self.odom_ts - self.hotspot_ts) > 0.1:
+        if abs(self.odom_ts - self.hotspot_ts) > 0.2:
             print(f"[WARN][RUN()] High Time diff :{abs(self.odom_ts - self.hotspot_ts)}")
             return
 
         RT = np.hstack((self.R_odom, self.T_odom))
         if self.T_map_imu is None:
-            self.T_map_imu_init_inv = np.linalg.inv(np.vstack((RT, np.array([0, 0, 0, 1]))))
-        self.T_map_imu = self.T_map_imu_init_inv @ np.vstack((RT, np.array([0, 0, 0, 1])))
+            self.T_map_imu_init_inv = np.linalg.inv(self.R_odom)
+        
+        self.T_map_imu = np.vstack((RT, np.array([0, 0, 0, 1])))
+        self.T_map_imu[:3, :3] = self.T_map_imu_init_inv @ self.T_map_imu[:3, :3]
         
         poses_reading_map_frame = PoseArray()
         for hotspot in self.poses_reading:
+            print("--- Calculating Hotspot Pose ------")
             hotspot_global = self.get_pose_in_map(hotspot.position).flatten()
             p = Pose()
             p.position.x, p.position.y, p.position.z = hotspot_global[0], hotspot_global[1], hotspot_global[2]
