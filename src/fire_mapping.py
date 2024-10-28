@@ -51,10 +51,11 @@ class Filter:
                                         [-1, 0, 0, 0],
                                         [0, -1, 0, 0],
                                         [0, 0, 0, 1]])
-        self.T_imu_camera = np.array([  [0.99995186,  -0.00374387, 0.00906943, -0.03028595],
-                                        [0.00370598,  0.99998435 , 0.00419059, 0.00362705],
-                                        [-0.00908498,  -0.00415678, 0.99995009, 0.01719125],
-                                        [0, 0, 0, 1.0]])
+        # self.T_imu_camera = np.array([  [0.99995186,  -0.00374387, 0.00906943, -0.03028595],
+        #                                 [0.00370598,  0.99998435 , 0.00419059, 0.00362705],
+        #                                 [-0.00908498,  -0.00415678, 0.99995009, 0.01719125],
+        #                                 [0, 0, 0, 1.0]])
+        self.T_imu_camera = np.eye(4)
         self.T_imu_thermal = self.T_imu_camera_rot @ self.T_imu_camera @ self.T_camera_thermal
 
 
@@ -204,7 +205,7 @@ class Filter:
         # publish MarkerArray
         plt.xlim(-5, 5)
         plt.ylim(-5, 5)
-        plt.savefig('/home/jaskaran/catkin_ws/src/rsun_fire_localization/plots/scatter.png')
+        plt.savefig('/home/phoenix/ros_ws/src/rsun_fire_localization/plots/scatter.png')
         self.publish_updated_hotspots()
 
     def hotspots_cb(self, msg):
@@ -250,7 +251,7 @@ class Filter:
             return
         
         if abs(self.odom_ts - self.hotspot_ts) > 0.2:
-            print(f"[WARN][RUN()] High Time diff :{abs(self.odom_ts - self.hotspot_ts)}")
+            print(f"[WARN][RUN()] High Time diff :{self.odom_ts - self.hotspot_ts}")
             return
 
         RT = np.hstack((self.R_odom, self.T_odom))
