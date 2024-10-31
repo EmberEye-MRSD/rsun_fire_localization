@@ -43,24 +43,25 @@ class Filter:
 
         self.T_map_imu_init_inv, self.T_map_imu = None, None
         self.T_odom, self.R_odom = None, None
-        self.T_camera_thermal = np.array([ [y,  0.048],
-                                [-0.0174524, 0.9998477,  0.0000000, -0.039],
-                                [0.0087252,  0.0001523,  0.9999619, -0.010],
-                                [0,          0,          0,          1]])
+        self.T_camera_thermal = np.array([  [0.9998720,  0.0000000, -0.0159993,  0.048],
+                                            [-0.0001600,  0.9999500, -0.0099986, -0.039],
+                                            [0.0159985,  0.0099998,  0.9998220, -0.010],
+                                            [0,          0,          0,          1]])
         self.T_imu_camera_rot = np.array([  [0, 0, 1, 0],
                                         [-1, 0, 0, 0],
                                         [0, -1, 0, 0],
                                         [0, 0, 0, 1]])
-        # self.T_imu_camera = np.array([  [0.99995186,  -0.00374387, 0.00906943, -0.03028595],
-        #                                 [0.00370598,  0.99998435 , 0.00419059, 0.00362705],
-        #                                 [-0.00908498,  -0.00415678, 0.99995009, 0.01719125],
-        #                                 [0, 0, 0, 1.0]])
+        self.T_imu_camera = np.array([  [0.99995186,  -0.00374387, 0.00906943, -0.03028595],
+                                        [0.00370598,  0.99998435 , 0.00419059, 0.00362705],
+                                        [-0.00908498,  -0.00415678, 0.99995009, 0.01719125],
+                                        [0, 0, 0, 1.0]])
         self.T_imu_camera = np.eye(4)
         self.T_imu_thermal = self.T_imu_camera_rot @ self.T_imu_camera @ self.T_camera_thermal
 
 
         self.odom_ts = None
         self.hotspot_ts = None
+        self.poses_reading = None
     
     def distance(self, p1, p2):
         # dist = np.sqrt((p1[0] - p2[0])**2 + (p1[1] - p2[1])**2 + (p1[2] - p2[2])**2)
@@ -205,7 +206,7 @@ class Filter:
         # publish MarkerArray
         plt.xlim(-5, 5)
         plt.ylim(-5, 5)
-        plt.savefig('/home/phoenix/ros_ws/src/rsun_fire_localization/plots/scatter.png')
+        plt.savefig('/home/jaskaran/catkin_ws/src/rsun_fire_localization/plots/scatter.png')
         self.publish_updated_hotspots()
 
     def hotspots_cb(self, msg):
