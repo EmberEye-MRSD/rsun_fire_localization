@@ -5,6 +5,7 @@ import numpy as np
 from geometry_msgs.msg import PoseArray, Pose
 from visualization_msgs.msg import MarkerArray, Marker
 from nav_msgs.msg import Odometry
+import tf2_ros
 
 import matplotlib.pyplot as plt
 from scipy.spatial.transform import Rotation as R
@@ -40,6 +41,10 @@ class Filter:
         self.hotspot_inflation_radius = hotspot_inflation_radius_param # in the worst case, min dist between drone and hotspot
 
         self.height_threshold = 0.0
+
+        self.tfBuffer = tf2_ros.Buffer()
+        self.listener = tf2_ros.TransformListener(self.tfBuffer)
+        self.rate = rospy.Rate(10.0)
 
         self.T_map_imu_init_inv, self.T_map_imu = None, None
         self.T_odom, self.R_odom = None, None
@@ -246,6 +251,8 @@ class Filter:
     
     
     def run(self, event=None):
+        tf_map_thermal = self.tfBuffer.lookup_transform('map', 'flir_boson_optical_frame', rospy.Time())
+        print(tf_map_thermal)
         if self.poses_reading is None:
             return
         if self.T_odom is None or self.R_odom is None or len(self.poses_reading) == 0:
