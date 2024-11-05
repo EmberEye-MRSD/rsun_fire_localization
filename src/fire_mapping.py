@@ -6,6 +6,8 @@ from geometry_msgs.msg import PoseArray, Pose
 from visualization_msgs.msg import MarkerArray, Marker
 from nav_msgs.msg import Odometry
 import tf2_ros
+import tf2_geometry_msgs
+from geometry_msgs.msg import PointStamped
 
 import matplotlib.pyplot as plt
 from scipy.spatial.transform import Rotation as R
@@ -209,8 +211,8 @@ class Filter:
         # self.outlier_rejection()
 
         # publish MarkerArray
-        plt.xlim(-5, 5)
-        plt.ylim(-5, 5)
+        plt.xlim(-20, 20)
+        plt.ylim(-20, 20)
         plt.savefig('/home/jaskaran/catkin_ws/src/rsun_fire_localization/plots/scatter.png')
         self.publish_updated_hotspots()
 
@@ -236,23 +238,30 @@ class Filter:
         
     def get_pose_in_map(self, pose):
         T_thermal_hotspot = np.array([pose.x, pose.y, pose.z, 1])
-        
+        point = PointStamped()
+        point.header.frame_id = "flir_boson_optical_frame"
+        point.header.stamp = rospy.Time.now()
+        point.point.x = pose.x
+        point.point.y = pose.y
+        point.point.z = pose.z
+        tf_map_thermal = self.tfBuffer.lookup_transform('map', 'flir_boson_optical_frame', rospy.Time(), timeout=rospy.Duration(0.5))
+        transformed_point = tf2_geometry_msgs.do_transform_point(point, tf_map_thermal)
+
         # T_thermal_hotspot = np.array([0, 0, 1, 1])
         # IMU in Map
         # print(self.T_map_imu)
-        plt.scatter([self.T_map_imu[0][3]], [self.T_map_imu[1][3]], color="red")
+        # plt.scatter([self.T_map_imu[0][3]], [self.T_map_imu[1][3]], color="red")
         # Thermal in Map
-        plt.scatter([(self.T_map_imu @ self.T_imu_thermal)[0][3]], [(self.T_map_imu @ self.T_imu_thermal)[1][3]], color="blue")
+        # plt.scatter([(self.T_map_imu @ self.T_imu_thermal)[0][3]], [(self.T_map_imu @ self.T_imu_thermal)[1][3]], color="blue")
         # Hotspot in Map
-        plt.scatter([(self.T_map_imu @ self.T_imu_thermal @ T_thermal_hotspot.reshape((4,1)))[0]], 
-                    [(self.T_map_imu @ self.T_imu_thermal @ T_thermal_hotspot.reshape((4,1)))[1]], color="green")
-
-        return self.T_map_imu @ self.T_imu_thermal @ T_thermal_hotspot.reshape((4,1))
+        # plt.scatter([(self.T_map_imu @ self.T_imu_thermal @ T_thermal_hotspot.reshape((4,1)))[0]], 
+                    # [(self.T_map_imu @ self.T_imu_thermal @ T_thermal_hotspot.reshape((4,1)))[1]], color="green")
+        T_map_hotspot = np.array([transformed_point.point.x, transformed_point.point.y, transformed_point.point.z, 1])
+        print(T_map_hotspot)
+        return T_map_hotspot
     
     
     def run(self, event=None):
-        tf_map_thermal = self.tfBuffer.lookup_transform('map', 'flir_boson_optical_frame', rospy.Time())
-        print(tf_map_thermal)
         if self.poses_reading is None:
             return
         if self.T_odom is None or self.R_odom is None or len(self.poses_reading) == 0:
