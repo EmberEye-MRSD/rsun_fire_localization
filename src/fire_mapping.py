@@ -213,7 +213,7 @@ class Filter:
         # publish MarkerArray
         plt.xlim(-20, 20)
         plt.ylim(-20, 20)
-        plt.savefig('/home/jaskaran/catkin_ws/src/rsun_fire_localization/plots/scatter.png')
+        plt.savefig('/home/phoenix/ros_ws/src/rsun_fire_localization/plots/scatter.png')
         self.publish_updated_hotspots()
 
     def hotspots_cb(self, msg):
