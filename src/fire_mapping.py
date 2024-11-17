@@ -5,6 +5,9 @@ import numpy as np
 from geometry_msgs.msg import PoseArray, Pose
 from visualization_msgs.msg import MarkerArray, Marker
 from nav_msgs.msg import Odometry
+import tf2_ros
+import tf2_geometry_msgs
+from geometry_msgs.msg import PointStamped
 
 import matplotlib.pyplot as plt
 from scipy.spatial.transform import Rotation as R
@@ -41,26 +44,31 @@ class Filter:
 
         self.height_threshold = 0.0
 
+        self.tfBuffer = tf2_ros.Buffer()
+        self.listener = tf2_ros.TransformListener(self.tfBuffer)
+        self.rate = rospy.Rate(10.0)
+
         self.T_map_imu_init_inv, self.T_map_imu = None, None
         self.T_odom, self.R_odom = None, None
-        self.T_camera_thermal = np.array([ [y,  0.048],
-                                [-0.0174524, 0.9998477,  0.0000000, -0.039],
-                                [0.0087252,  0.0001523,  0.9999619, -0.010],
-                                [0,          0,          0,          1]])
+        self.T_camera_thermal = np.array([  [0.9998720,  0.0000000, -0.0159993,  0.048],
+                                            [-0.0001600,  0.9999500, -0.0099986, -0.039],
+                                            [0.0159985,  0.0099998,  0.9998220, -0.010],
+                                            [0,          0,          0,          1]])
         self.T_imu_camera_rot = np.array([  [0, 0, 1, 0],
                                         [-1, 0, 0, 0],
                                         [0, -1, 0, 0],
                                         [0, 0, 0, 1]])
-        # self.T_imu_camera = np.array([  [0.99995186,  -0.00374387, 0.00906943, -0.03028595],
-        #                                 [0.00370598,  0.99998435 , 0.00419059, 0.00362705],
-        #                                 [-0.00908498,  -0.00415678, 0.99995009, 0.01719125],
-        #                                 [0, 0, 0, 1.0]])
+        self.T_imu_camera = np.array([  [0.99995186,  -0.00374387, 0.00906943, -0.03028595],
+                                        [0.00370598,  0.99998435 , 0.00419059, 0.00362705],
+                                        [-0.00908498,  -0.00415678, 0.99995009, 0.01719125],
+                                        [0, 0, 0, 1.0]])
         self.T_imu_camera = np.eye(4)
         self.T_imu_thermal = self.T_imu_camera_rot @ self.T_imu_camera @ self.T_camera_thermal
 
 
         self.odom_ts = None
         self.hotspot_ts = None
+        self.poses_reading = None
     
     def distance(self, p1, p2):
         # dist = np.sqrt((p1[0] - p2[0])**2 + (p1[1] - p2[1])**2 + (p1[2] - p2[2])**2)
@@ -203,8 +211,8 @@ class Filter:
         # self.outlier_rejection()
 
         # publish MarkerArray
-        plt.xlim(-5, 5)
-        plt.ylim(-5, 5)
+        plt.xlim(-20, 20)
+        plt.ylim(-20, 20)
         plt.savefig('/home/phoenix/ros_ws/src/rsun_fire_localization/plots/scatter.png')
         self.publish_updated_hotspots()
 
@@ -230,18 +238,27 @@ class Filter:
         
     def get_pose_in_map(self, pose):
         T_thermal_hotspot = np.array([pose.x, pose.y, pose.z, 1])
-        
+        point = PointStamped()
+        point.header.frame_id = "flir_boson_optical_frame"
+        point.header.stamp = rospy.Time.now()
+        point.point.x = pose.x
+        point.point.y = pose.y
+        point.point.z = pose.z
+        tf_map_thermal = self.tfBuffer.lookup_transform('map', 'flir_boson_optical_frame', rospy.Time(), timeout=rospy.Duration(0.5))
+        transformed_point = tf2_geometry_msgs.do_transform_point(point, tf_map_thermal)
+
         # T_thermal_hotspot = np.array([0, 0, 1, 1])
         # IMU in Map
         # print(self.T_map_imu)
-        plt.scatter([self.T_map_imu[0][3]], [self.T_map_imu[1][3]], color="red")
+        # plt.scatter([self.T_map_imu[0][3]], [self.T_map_imu[1][3]], color="red")
         # Thermal in Map
-        plt.scatter([(self.T_map_imu @ self.T_imu_thermal)[0][3]], [(self.T_map_imu @ self.T_imu_thermal)[1][3]], color="blue")
+        # plt.scatter([(self.T_map_imu @ self.T_imu_thermal)[0][3]], [(self.T_map_imu @ self.T_imu_thermal)[1][3]], color="blue")
         # Hotspot in Map
-        plt.scatter([(self.T_map_imu @ self.T_imu_thermal @ T_thermal_hotspot.reshape((4,1)))[0]], 
-                    [(self.T_map_imu @ self.T_imu_thermal @ T_thermal_hotspot.reshape((4,1)))[1]], color="green")
-
-        return self.T_map_imu @ self.T_imu_thermal @ T_thermal_hotspot.reshape((4,1))
+        # plt.scatter([(self.T_map_imu @ self.T_imu_thermal @ T_thermal_hotspot.reshape((4,1)))[0]], 
+                    # [(self.T_map_imu @ self.T_imu_thermal @ T_thermal_hotspot.reshape((4,1)))[1]], color="green")
+        T_map_hotspot = np.array([transformed_point.point.x, transformed_point.point.y, transformed_point.point.z, 1])
+        print(T_map_hotspot)
+        return T_map_hotspot
     
     
     def run(self, event=None):
