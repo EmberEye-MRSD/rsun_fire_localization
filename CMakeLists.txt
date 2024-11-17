@@ -153,6 +153,7 @@ include_directories(${PCL_INCLUDE_DIR})
 
 add_executable(single_hotspot_localization src/realsense_fire_localization.cpp)
 add_executable(multi_hotspot_localization src/multi_hotspot_localization.cpp)
+add_executable(multi_hotspot_localization_async src/multi_hotspot_localization_async.cpp)
 
 ## Rename C++ executable without prefix
 ## The above recommended prefix causes long target names, the following renames the
@@ -177,6 +178,11 @@ target_link_libraries(multi_hotspot_localization ${OpenCV_LIBRARIES} ${catkin_LI
 target_link_libraries(multi_hotspot_localization ${catkin_LIBRARIES} ${EIGEN3_LIBRARIES})
 target_link_libraries(multi_hotspot_localization ${OpenCV_LIBRARIES} ${OpenCV_LIBRARIES})
 target_link_libraries(multi_hotspot_localization ${OpenCV_LIBRARIES} ${PCL_LIBRARIES})
+
+target_link_libraries(multi_hotspot_localization_async ${OpenCV_LIBRARIES} ${catkin_LIBRARIES})
+target_link_libraries(multi_hotspot_localization_async ${catkin_LIBRARIES} ${EIGEN3_LIBRARIES})
+target_link_libraries(multi_hotspot_localization_async ${OpenCV_LIBRARIES} ${OpenCV_LIBRARIES})
+target_link_libraries(multi_hotspot_localization_async ${OpenCV_LIBRARIES} ${PCL_LIBRARIES})
 
 #############
 ## Install ##

@@ -1,0 +1,20 @@
+<launch>
+    <node pkg="tf2_ros" type="static_transform_publisher" name="static_transform_publisher" args="$0.048 -0.039 -0.020 0.0 -0.016 0.01 camera_depth_optical_frame flir_boson_optical_frame" />
+
+    <node pkg="nodelet" type="nodelet" name="pcl_manager" args="manager" output="screen" />
+
+    <node pkg="nodelet" type="nodelet" name="voxel_grid" args="load pcl/VoxelGrid pcl_manager" output="screen">
+        <remap from="~input" to="/camera/depth/color/points" />
+        <remap from="~output" to="/camera/depth/color/downsampled_points" />
+        <rosparam>
+            filter_field_name: z
+            filter_limit_min: 0.01
+            filter_limit_max: 5.00
+            filter_limit_negative: False
+            leaf_size: 0.10
+        </rosparam>
+    </node>
+
+    <node pkg="rsun_fire_localization" type="multi_hotspot_localization_async" name="multi_hotspot_localization_async" output="screen"/>
+
+</launch>
