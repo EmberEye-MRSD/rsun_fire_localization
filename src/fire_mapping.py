@@ -165,7 +165,24 @@ class Filter:
             # create new marker for given hotspot
             marker = self.get_marker(point, i)
 
+            # Text marker
+            text_marker = Marker()
+            text_marker.header.frame_id = "map"
+            text_marker.id = i + 100  # Use a unique ID for each text marker
+            text_marker.type = Marker.TEXT_VIEW_FACING
+            text_marker.action = Marker.ADD
+            text_marker.pose.position.x = marker.pose.position.x
+            text_marker.pose.position.y = marker.pose.position.y
+            text_marker.pose.position.z = marker.pose.position.z + 1  # Position above the marker
+            text_marker.scale.z = 0.5  # Text height
+            text_marker.color.a = 1.0
+            text_marker.color.r = 1.0
+            text_marker.color.g = 1.0
+            text_marker.color.b = 1.0
+            text_marker.text = f"[x: {round(marker.pose.position.x, 2)}, y: {round(marker.pose.position.y, 2)}, z: {round(marker.pose.position.z, 2)}]"  # Text to display
+
             marker_array.markers.append(marker)
+            marker_array.markers.append(text_marker)
         
         self.hotspot_pub.publish(marker_array)
     
